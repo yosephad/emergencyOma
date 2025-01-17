@@ -1,0 +1,68 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <WiFiClient.h>
+
+const char* ssid = "NFC0X";
+const char* password = "k4m1nd0!@#";
+
+const int buttonPin = D3;  // Pin untuk tombol
+const int ledPin = LED_BUILTIN;  // Pin untuk lampu onboard
+bool buttonState = LOW;
+bool lastButtonState = LOW;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(ledPin, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    digitalWrite(ledPin, !digitalRead(ledPin));  // Blink LED
+    delay(500);
+    Serial.print(".");
+  }
+  digitalWrite(ledPin, LOW);  // Turn off LED after connection
+  Serial.println("\nConnected to WiFi");
+  digitalWrite(ledPin, HIGH);  // Turn on LED to indicate connection
+}
+
+void loop() {
+  bool currentButtonState = digitalRead(buttonPin);
+
+  if (currentButtonState == HIGH && lastButtonState == LOW) {
+    // Tombol ditekan (Normally Closed berarti tombol membuka sirkuit saat ditekan)
+    sendGETRequest("http://nfc02.id/alarmsystems/alarm.php?entity=sender&location=bg&area=oma&status=true");
+  } else if (currentButtonState == LOW && lastButtonState == HIGH) {
+    // Tombol dilepas (sirkuit kembali menutup)
+    sendGETRequest("http://nfc02.id/alarmsystems/alarm.php?entity=sender&location=bg&area=oma&status=false");
+  }
+
+  lastButtonState = currentButtonState;
+  delay(50);  // Debounce delay
+}
+
+void sendGETRequest(const char* url) {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClient client;
+    HTTPClient http;
+
+    if (http.begin(client, url)) {
+      int httpCode = http.GET();
+
+      if (httpCode > 0) {
+        String payload = http.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
+      } else {
+        Serial.printf("GET request failed: %s\n", http.errorToString(httpCode).c_str());
+      }
+
+      http.end();
+    } else {
+      Serial.println("Unable to connect");
+    }
+  } else {
+    Serial.println("WiFi not connected");
+  }
+}
